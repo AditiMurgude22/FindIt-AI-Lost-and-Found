@@ -1,0 +1,399 @@
+{
+  "name": "FindIt AI Lost-and-Found Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "cb5b6ab7-20b8-4249-8406-b1f55863242d",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "53efd701-688c-4aae-8ca6-d8a61e39827a",
+              "name": "message",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "a370174e-4280-47ab-a537-1da5ff41bd8f",
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2835e70d-3b5b-423a-bc57-4a5da8eca008",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "Gemini 3.5 Flash Lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are FindIt, an intelligent AI assistant for a college lost-and-found management system.\n\nYour task is to analyze a student's Telegram message and extract accurate, structured information about a lost or found item. The extracted information will be used by an n8n workflow to store reports in Google Sheets and identify possible matches between lost and found items.\n\nSTUDENT'S TELEGRAM MESSAGE:\n{{ $json.message }}\n\nINSTRUCTIONS:\n\n1. REPORT TYPE\n   Determine whether the student is reporting a lost item or a found item.\n\n- Use \"Lost\" when the student has lost or misplaced an item.\n- Use \"Found\" when the student has found an item belonging to someone else.\n- Do not assume the report type if the message does not provide enough information. Use an empty string if it cannot be determined.\n\n2. ITEM CATEGORY\n   Identify the general category of the item.\n   Examples include Wallet, Phone, Laptop, ID Card, College ID, Keys, Bag, Water Bottle, Earphones, Charger, Notebook, Book, Watch, Jewellery, Umbrella, and Other.\n   Use the most appropriate category based on the message. Do not invent a category unrelated to the item.\n\n3. ITEM NAME\n   Extract the specific item name mentioned by the student.\n   Examples: wallet, Samsung phone, black backpack, college ID card, blue notebook.\n   Preserve relevant brand or model information when the student provides it.\n   Do not invent a brand, model, or item name.\n\n4. COLOR\n   Extract the item's color if mentioned.\n   Examples: black, blue, red, white, silver, black and grey.\n   If the student does not mention the color, return an empty string.\n   Do not guess the color from the item category.\n\n5. DESCRIPTION\n   This field is important. Capture all useful details the student provides about the item.\n\nInclude relevant details such as:\n\n- Appearance and distinguishing features\n- Brand or model\n- Material, shape, or size\n- Stickers, logos, labels, marks, or patterns\n- Contents or accessories, if mentioned\n- Damage or other unique characteristics\n- Any other detail that could help identify the same physical item\n\nWrite a concise but informative description in natural English.\n\nExamples:\nStudent message: \"I lost my black wallet with a small silver logo.\"\nDescription: \"Black wallet with a small silver logo.\"\n\nStudent message: \"I found a blue water bottle with a white sticker near the library.\"\nDescription: \"Blue water bottle with a white sticker.\"\n\nStudent message: \"I lost my Samsung phone with a cracked screen and a transparent back cover.\"\nDescription: \"Samsung phone with a cracked screen and a transparent back cover.\"\n\nStudent message: \"I lost my wallet in the computer lab today.\"\nDescription: \"Wallet reported lost in the computer lab. No additional identifying details were provided.\"\n\nIf the message includes useful identifying details, do not leave the description empty.\n\nIf the student provides no identifying details beyond the item name, write a short description using only the information available. Do not invent physical features, brands, colors, or other facts.\n\n6. LOCATION\n   Extract the location where the item was lost or found.\n   Examples: computer lab, library, classroom 204, college canteen, parking area, main building.\n   Use the location as stated by the student. Do not invent a location.\n   If the location is not mentioned, return an empty string.\n\n7. DATE LOST OR FOUND\n   Extract the date or time reference provided by the student.\n   Examples: today, yesterday, Monday, 25 October 2026.\n   Preserve the student's stated date or time reference. Do not convert relative dates unless the actual current date is explicitly available and the conversion is reliable.\n   If no date or time is mentioned, return an empty string.\n\nGENERAL RULES:\n\n- Extract information only from the student's message.\n- Never invent missing information.\n- Do not confuse the place where the student is currently messaging with the location where the item was lost or found.\n- Correct obvious spelling errors when doing so does not change the meaning.\n- Use clear, concise English.\n- Return every required field, even when its value is unknown.\n- Use an empty string \"\" for unknown or unmentioned values.\n- Do not include the student's Telegram user ID, report ID, possible match ID, status, or creation timestamp. These are handled separately by the workflow.\n- Do not identify a possible matching report in this step. Matching is handled by a separate AI node.\n\nOUTPUT FORMAT:\nReturn exactly one valid JSON object with these seven keys:\n{\n\"reportType\": \"\",\n\"itemCategory\": \"\",\n\"itemName\": \"\",\n\"color\": \"\",\n\"description\": \"\",\n\"location\": \"\",\n\"dateLostFound\": \"\"\n}\n\nReturn valid JSON only. Do not include Markdown code fences, explanations, comments, or additional text."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "d413d2a7-8125-4ad2-a679-0696a680dcd5",
+      "name": "Message a model",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $json;\n\nconst text =\n  item.content?.parts?.[0]?.text ||\n  item.text ||\n  item.output ||\n  \"\";\n\nif (!text) {\n  throw new Error(\"Gemini text output was not found.\");\n}\n\nconst cleanText = text\n  .replace(/```json/g, \"\")\n  .replace(/```/g, \"\")\n  .trim();\n\nconst data = JSON.parse(cleanText);\n\nreturn {\n  json: data\n};"
+      },
+      "id": "f97d55b3-83e9-4fd1-9a51-0b5b34b40438",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "452d4bbe-04a7-43a9-8ceb-3eb85e73df4c",
+      "name": "Get row(s) in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1040,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Report Id": "FI004",
+            "TelegramUserID": "={{ $('Telegram Trigger').first().json.message.from.id }}",
+            "ReportType": "={{ $('Code in JavaScript').first().json.reportType }}",
+            "ItemCategory": "={{ $('Code in JavaScript').first().json.itemCategory }}",
+            "ItemName": "={{ $('Code in JavaScript').first().json.itemName }}",
+            "Color": "={{ $('Code in JavaScript').first().json.color }}",
+            "Description": "={{ $('Code in JavaScript').first().json.description }}",
+            "Location": "={{ $('Code in JavaScript').first().json.location }}",
+            "DateLostFound": "={{ $('Code in JavaScript').first().json.dateLostFound }}",
+            "Status": "Open",
+            "PossibleMatchID": "={{ JSON.parse($('Message a model1').first().json.content.parts[0].text).matchedReportId || \"\" }}",
+            "CreatedAt": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Report Id",
+              "displayName": "Report Id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TelegramUserID",
+              "displayName": "TelegramUserID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ReportType",
+              "displayName": "ReportType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ItemCategory",
+              "displayName": "ItemCategory",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ItemName",
+              "displayName": "ItemName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Color",
+              "displayName": "Color",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description",
+              "displayName": "Description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DateLostFound",
+              "displayName": "DateLostFound",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PossibleMatchID",
+              "displayName": "PossibleMatchID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "CreatedAt",
+              "displayName": "CreatedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "295e4647-e790-42a2-9215-d71f905db4b9",
+      "name": "Append row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1392,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "",
+        "subject": "FindIt- Lost-and-Found-Report",
+        "message": "A new lost-and-found report has been submitted through FindIt.  Please check the FindIt Google Sheet for the report details and any possible matches.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        224
+      ],
+      "id": "4c916cda-80b1-4ddc-a2d4-48881709e801",
+      "name": "Send a message"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "Gemini 3.1 Flash Lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are FindIt, an AI lost-and-found matching assistant for a college.\n\nYour task is to compare a new lost-or-found report with existing records retrieved from Google Sheets. Identify whether an existing report plausibly refers to the same physical item.\n\nNEW REPORT:\n{{ JSON.stringify($('Code in JavaScript').first().json) }}\n\nEXISTING GOOGLE SHEETS RECORDS:\n{{ JSON.stringify($input.all().map(item => item.json)) }}\n\nMATCHING RULES:\n\n1. REPORT TYPE\n\n- A \"Lost\" report may match a \"Found\" report.\n- A \"Found\" report may match a \"Lost\" report.\n- Never match a \"Lost\" report with another \"Lost\" report.\n- Never match a \"Found\" report with another \"Found\" report.\n- A valid match must be between opposite report types.\n\n2. ITEM SIMILARITY\n   Compare the following fields:\n\n- ItemCategory\n- ItemName\n- Color\n- Description\n- Location\n- DateLostFound, when useful\n\nLook for meaningful similarities that suggest both reports concern the same physical item.\n\n3. MATCHING EVIDENCE\n\n- Give more importance to distinctive details, such as a brand, logo, sticker, unusual feature, or identifying mark.\n- Similar item names alone are not enough to establish a match.\n- A shared location alone is not enough to establish a match.\n- Common colors alone are not enough to establish a match.\n- Consider the description and other available details together.\n- Do not require every field to match if the available evidence is otherwise convincing.\n- Do not invent details that are missing from either report.\n\n4. REPORT ID\n\n- Use the exact existing value from the \"Report Id\" field of the matched Google Sheets record.\n- Never invent, modify, or guess a report ID.\n- Never return the new report's own ID as a match.\n- If no sufficiently plausible opposite-type report exists, use an empty string for matchedReportId.\n\n5. MULTIPLE MATCHES\n   If several reports could match, select the strongest plausible match based on the available evidence.\n\n6. NO MATCH\n   If there is no sufficiently convincing match, return:\n\n- possibleMatch: false\n- matchedReportId: \"\"\n- reason: A brief explanation of why no suitable match was found.\n- reply: \"Your report has been saved. No possible match was found at this time.\"\n\n7. MATCH FOUND\n   If a plausible match exists, return:\n\n- possibleMatch: true\n- matchedReportId: The exact existing Report Id.\n- reason: A concise explanation of the matching evidence.\n- reply: A helpful message telling the student that a possible matching report was found and giving its report ID. Do not claim that the item definitely belongs to the student.\n\n8. DATA HANDLING\n\n- Use only the new report and existing records provided in the input.\n- Do not treat missing fields as confirmed matches.\n- If no existing records are provided, return no match.\n- Do not return a report as a match if its report type is missing or does not establish an opposite-type match.\n- Do not include personal information that is unnecessary for identifying the report.\n\nOUTPUT FORMAT:\nReturn exactly one valid JSON object with this structure:\n\n{\n\"possibleMatch\": false,\n\"matchedReportId\": \"\",\n\"reason\": \"No sufficiently strong matching report was found.\",\n\"reply\": \"Your report has been saved. No possible match was found at this time.\"\n}\n\nWhen a plausible match exists, update the values accordingly.\n\nReturn valid JSON only. Do not include Markdown code fences, explanations outside the JSON, or additional text."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "27100f07-1522-48ed-a319-903e8d80686d",
+      "name": "Message a model1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
